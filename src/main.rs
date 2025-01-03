@@ -2,47 +2,65 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufWriter;
 mod colour;
+mod hittable;
+mod hittable_list;
 mod ray;
+mod rtweekend;
+mod sphere;
 mod vec3;
 use colour::{write_color, Colour};
+use hittable::hit_record;
+use hittable::Hittable;
+use hittable_list::HittableList;
 use ray::Ray;
+use rtweekend::INFINITY;
 use vec3::Point3;
 use vec3::Vec3;
 
-fn ray_colour(r: &Ray) -> Colour {
-    let t = hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r);
-    if t > 0.0 {
-        let nrm = (r.at(t) - Vec3::new(0.0, 0.0, -1.0)).unit_vector();
-        return Colour::new(nrm.x + 1.0, nrm.y + 1.0, nrm.z + 1.0) * 0.5;
+fn ray_colour(r: &Ray, world: &dyn Hittable) -> Colour {
+    let mut rec: hit_record = hit_record::default();
+    if world.hit(r, 0.0, INFINITY, &mut rec) {
+        return (rec.normal + Colour::new(1.0, 1.0, 1.0)) * 0.5;
     }
 
     let unit_direction = r.direction().unit_vector();
-    let t = 0.5 * (unit_direction.y + 1.0);
-    Colour::new(
-        (1.0 - t) * 1.0 + t * 0.5,
-        (1.0 - t) * 1.0 + t * 0.7,
-        (1.0 - t) * 1.0 + t * 1.0,
-    )
+    let a = 0.5 * (unit_direction.y + 1.0);
+    Colour::new(1.0, 1.0, 1.0) * (1.0 - a) + Colour::new(0.5, 0.7, 1.0) * a
 }
 
-fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
-    let oc = *r.origin() - center;
-    let a = r.direction().dot(&r.direction());
-    let b = 2.0 * oc.dot(&r.direction());
-    let c = oc.dot(&oc) - radius * radius;
-    let discriminant = b * b - 4.0 * a * c;
-    if discriminant < 0.0 {
-        -1.0
-    } else {
-        (-b - discriminant.sqrt()) / (2.0 * a)
-    }
-}
+// fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> f64 {
+//     let oc = *r.origin() - center;
+//     let a = r.direction().length_squared();
+//     let h = r.direction().dot(&oc);
+//     let c = oc.length_squared() - radius * radius;
+//     let discriminant = h * h - a * c;
+//     if discriminant < 0.0 {
+//         -1.0
+//     } else {
+//         (-h - discriminant.sqrt()) / a
+//     }
+// }
 
 fn main() -> std::io::Result<()> {
     // Image
     let aspect_ratio: f64 = 16.0 / 9.0;
     let image_width: i32 = 400;
-    let image_height: i32 = (image_width as f64 / aspect_ratio) as i32;
+    let mut image_height: i32 = (image_width as f64 / aspect_ratio) as i32;
+    if image_height < 1 {
+        image_height = 1;
+    } else {
+        image_height = image_height;
+    }
+
+    let mut world = HittableList::new_empty();
+    world.add(Box::new(sphere::Sphere::new(
+        Point3::new(0.0, 0.0, -1.0),
+        0.5,
+    )));
+    world.add(Box::new(sphere::Sphere::new(
+        Point3::new(0.0, -100.5, -1.0),
+        100.0,
+    )));
 
     // Camera
     let focal_length: f64 = 1.0;
@@ -71,7 +89,7 @@ fn main() -> std::io::Result<()> {
             let ray_direction = pixel_center - camera_center;
             let r = Ray::new(camera_center, ray_direction);
 
-            let pixel_color = ray_colour(&r);
+            let pixel_color = ray_colour(&r, &world);
             write_color(&mut writer, &pixel_color)?;
         }
     }
