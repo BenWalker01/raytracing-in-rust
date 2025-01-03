@@ -10,33 +10,42 @@ use vec3::Point3;
 use vec3::Vec3;
 
 fn ray_colour(r: &Ray) -> Colour {
+    if hit_sphere(Point3::new(0.0, 0.0, -1.0), 0.5, r) {
+        return Colour::new(1.0, 0.0, 0.0);
+    }
+
     let unit_direction = r.direction().unit_vector();
-    let a = 0.5 * (unit_direction.y + 1.0);
+    let t = 0.5 * (unit_direction.y + 1.0);
     Colour::new(
-        (1.0 - a) * 1.0 + a * 0.5,
-        (1.0 - a) * 1.0 + a * 0.7,
-        (1.0 - a) * 1.0 + a * 1.0,
+        (1.0 - t) * 1.0 + t * 0.5,
+        (1.0 - t) * 1.0 + t * 0.7,
+        (1.0 - t) * 1.0 + t * 1.0,
     )
+}
+
+fn hit_sphere(center: Point3, radius: f64, r: &Ray) -> bool {
+    let oc = center - *r.origin();
+    let a = r.direction().dot(&r.direction());
+    let b = 2.0 * oc.dot(&r.direction());
+    let c = oc.dot(&oc) - radius * radius;
+    let discriminant = b * b - 4.0 * a * c;
+    discriminant >= 0.0
 }
 
 fn main() -> std::io::Result<()> {
     // Image
-
     let aspect_ratio: f64 = 16.0 / 9.0;
-    let image_width: i32 = 256;
-
-    let image_height: i32 = image_width / aspect_ratio as i32;
-    let image_height = if image_height < 1 { 1 } else { image_height };
+    let image_width: i32 = 400;
+    let image_height: i32 = (image_width as f64 / aspect_ratio) as i32;
 
     // Camera
     let focal_length: f64 = 1.0;
     let viewport_height = 2.0;
-    let viewport_width: i32 = (viewport_height * (image_width as f64) / image_height as f64) as i32;
+    let viewport_width = aspect_ratio * viewport_height;
     let camera_center = Point3::new(0.0, 0.0, 0.0);
 
-    let viewport_u = Vec3::new(viewport_width as f64, 0.0, 0.0);
-    let viewport_v = Vec3::new(0.0, -viewport_height as f64, 0.0);
-
+    let viewport_u = Vec3::new(viewport_width, 0.0, 0.0);
+    let viewport_v = Vec3::new(0.0, viewport_height, 0.0);
     let pixel_delta_u = viewport_u / image_width as f64;
     let pixel_delta_v = viewport_v / image_height as f64;
 
@@ -48,7 +57,7 @@ fn main() -> std::io::Result<()> {
     let mut writer = BufWriter::new(file);
     write!(writer, "P3\n{} {}\n255\n", image_width, image_height)?;
 
-    for j in 0..image_height {
+    for j in (0..image_height).rev() {
         print!("\rScanlines remaining: {}", image_height - j);
         for i in 0..image_width {
             let pixel_center =
@@ -56,9 +65,8 @@ fn main() -> std::io::Result<()> {
             let ray_direction = pixel_center - camera_center;
             let r = Ray::new(camera_center, ray_direction);
 
-            let pixel_colour = ray_colour(&r);
-
-            write_color(&mut writer, &pixel_colour)?;
+            let pixel_color = ray_colour(&r);
+            write_color(&mut writer, &pixel_color)?;
         }
     }
     println!("\rDone.                      \n");
